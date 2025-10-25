@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thinkbox Calendar</title>
+<style>
+  :root {
+    --bg-light: #ffffff;
+    --bg-dark: #121212;
+    --text-light: #000000;
+    --text-dark: #ffffff;
+    --primary: #4caf50;
+    --secondary: #f44336;
+  }
+
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: var(--bg-light);
+    color: var(--text-light);
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-dark);
+    }
+  }
+
+  h1 {
+    text-align: center;
+    margin-top: 20px;
+  }
+
+  #calendar {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    max-width: 700px;
+    margin: 20px auto;
+    gap: 5px;
+  }
+
+  .day {
+    border: 1px solid #ccc;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: 0.2s;
+  }
+
+  .day:hover {
+    background-color: var(--primary);
+    color: #fff;
+  }
+
+  /* Modal styling */
+  #modal {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    justify-content: center; align-items: center;
+  }
+
+  #modalContent {
+    background: #fff;
+    color: #000;
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 350px;
+    width: 90%;
+    text-align: center;
+  }
+
+  #modalContent input {
+    width: 90%;
+    padding: 8px;
+    margin: 5px 0;
+  }
+
+  #modalContent button {
+    margin: 10px;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  #addBtn { background-color: var(--primary); color: #fff; }
+  #viewBtn { background-color: var(--secondary); color: #fff; }
+
+  /* User menu */
+  #userMenuIcon {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    font-size: 28px;
+    cursor: pointer;
+    z-index: 20;
+  }
+
+  #userMenu {
+    display: none;
+    position: fixed;
+    top: 50px;
+    right: 15px;
+    background: #fff;
+    color: #000;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.3);
+    padding: 10px;
+    z-index: 20;
+  }
+
+  #userMenu button {
+    display: block;
+    margin: 5px 0;
+    padding: 5px 10px;
+    width: 100%;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: var(--primary);
+    color: #fff;
+  }
+</style>
+</head>
+<body>
+<h1>Thinkbox Calendar</h1>
+
+<!-- User Menu Icon -->
+<div id="userMenuIcon">👤</div>
+<div id="userMenu">
+  <button data-user="Ray">Ray</button>
+  <button data-user="Jihad">Jihad</button>
+  <button data-user="Nour">Nour</button>
+  <button data-user="Ruba">Ruba</button>
+  <button data-user="Sara">Sara</button>
+  <button data-user="Hana">Hana</button>
+</div>
+
+<div id="calendar"></div>
+
+<!-- Modal for add/view reservations -->
+<div id="modal">
+  <div id="modalContent">
+    <h3 id="modalDate"></h3>
+    <input type="text" id="resName" placeholder="Your Name">
+    <input type="text" id="resPhone" placeholder="Phone Number">
+    <input type="datetime-local" id="resDateTime">
+    <br>
+    <button id="addBtn">Add Reservation</button>
+    <button id="viewBtn">View Reservations</button>
+    <br><br>
+    <button id="closeModal">Close</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+// --- Firebase demo config ---
+const firebaseConfig = {
+  apiKey: "AIzaSyD-demo-key",
+  authDomain: "thinkbox-calendar-demo.firebaseapp.com",
+  databaseURL: "https://thinkbox-calendar-demo-default-rtdb.firebaseio.com",
+  projectId: "thinkbox-calendar-demo",
+  storageBucket: "thinkbox-calendar-demo.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:demo"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// --- Calendar generation ---
+const calendar = document.getElementById('calendar');
+const today = new Date();
+const year = today.getFullYear();
+const month = today.getMonth();
+const daysInMonth = new Date(year, month+1, 0).getDate();
+
+for (let d=1; d<=daysInMonth; d++) {
+  const dayDiv = document.createElement('div');
+  dayDiv.classList.add('day');
+  dayDiv.textContent = d;
+  dayDiv.dataset.date = `${year}-${month+1}-${d}`;
+  dayDiv.addEventListener('click', () => openModal(dayDiv.dataset.date));
+  calendar.appendChild(dayDiv);
+}
+
+// --- Modal handling ---
+const modal = document.getElementById('modal');
+const modalDate = document.getElementById('modalDate');
+const addBtn = document.getElementById('addBtn');
+const viewBtn = document.getElementById('viewBtn');
+const closeModal = document.getElementById('closeModal');
+const resName = document.getElementById('resName');
+const resPhone = document.getElementById('resPhone');
+const resDateTime = document.getElementById('resDateTime');
+let currentDate = '';
+
+function openModal(date) {
+  currentDate = date;
+  modal.style.display = 'flex';
+  modalDate.textContent = date;
+}
+
+closeModal.addEventListener('click', ()=> modal.style.display='none');
+
+addBtn.addEventListener('click', () => {
+  if(!resName.value) { alert('Enter a name'); return; }
+  const phone = resPhone.value || '';
+  const dateTime = resDateTime.value || '';
+  const reservationRef = db.ref('reservations/' + currentDate);
+  reservationRef.push({name: resName.value, phone, dateTime, timestamp: Date.now()});
+  alert('Reservation added!');
+  modal.style.display='none';
+  resName.value = '';
+  resPhone.value = '';
+  resDateTime.value = '';
+
+  // Notification
+  if (Notification.permission === "granted") {
+    new Notification("Thinkbox Calendar", {body: `New reservation added on ${currentDate}!`});
+  }
+});
+
+viewBtn.addEventListener('click', () => {
+  const reservationRef = db.ref('reservations/' + currentDate);
+  reservationRef.once('value', snapshot => {
+    const data = snapshot.val();
+    let message = '';
+    if(data) {
+      for(let key in data) {
+        message += `Name: ${data[key].name}\nPhone: ${data[key].phone}\nDate/Time: ${data[key].dateTime}\n\n`;
+      }
+    } else {
+      message = 'No reservations yet!';
+    }
+    alert(message);
+  });
+});
+
+// --- User menu ---
+const userIcon = document.getElementById('userMenuIcon');
+const userMenu = document.getElementById('userMenu');
+userIcon.addEventListener('click', ()=> userMenu.style.display = userMenu.style.display==='block'?'none':'block');
+
+userMenu.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const user = btn.dataset.user;
+    const historyRef = db.ref('reservations');
+    let userHistory = [];
+    historyRef.once('value', snapshot => {
+      snapshot.forEach(daySnap => {
+        daySnap.forEach(resSnap => {
+          const res = resSnap.val();
+          if(res.name === user) userHistory.push(`${daySnap.key} - ${res.dateTime||'No Date/Time'}`);
+        });
+      });
+      alert(userHistory.length ? userHistory.join('\n') : `${user} has no game master history.`);
+    });
+    userMenu.style.display='none';
+  });
+});
+</script>
